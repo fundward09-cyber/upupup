@@ -1,0 +1,12 @@
+[project]
+name = "skhynix-dashboard"
+version = "0.1.0"
+description = "Daily price dashboard for CSOP 2x SK Hynix ETF (7709.HK), SK Hynix KRX (000660.KS) and SK Hynix US (SKHY)"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "yfinance>=0.2.40",
+    "pandas>=2.0",
+    "numpy>=1.24",
+]
