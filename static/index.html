@@ -41,6 +41,13 @@
   button.refresh{background:var(--panel2);color:var(--txt);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px}
   button.refresh:hover{border-color:var(--gold)}
   .skel{color:var(--sub);font-size:13px;padding:20px 0}
+  .session{margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:11px}
+  .session .hours{color:var(--sub)}
+  .pill{padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600}
+  .pill.open{background:rgba(33,199,168,.15);color:var(--up)}
+  .pill.closed{background:rgba(139,148,158,.15);color:var(--sub)}
+  .pill.premarket{background:rgba(240,185,11,.15);color:var(--gold)}
+  .clock{font-size:12px;color:var(--gold);font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -56,6 +63,7 @@
       <button class="refresh" onclick="manualRefresh()">立即刷新</button>
     </div>
     <div id="fetched" style="margin-top:4px"></div>
+    <div class="clock" id="clock" style="margin-top:4px">北京时间 —</div>
   </div>
 </header>
 
@@ -115,6 +123,79 @@ function fmtTime(ts){
   return d.toLocaleString('zh-CN',{hour12:false});
 }
 
+// ---- Market trading sessions (all times in minutes, Beijing time UTC+8) ----
+// HKEX:  09:30-12:00 / 13:00-16:00 HKT = same in Beijing
+// KRX:   09:00-15:30 KST = 08:00-14:30 Beijing
+// US :   09:30-16:00 ET  = 21:30-04:00 Beijing (summer DST, Mar–early Nov)
+//        winter std time: 22:30-05:00 Beijing
+const MARKET_SESSIONS = {
+  "HK": {
+    label:"港股 HKEX",
+    // continuous trading only (skip pre-open auction & lunch break detail)
+    windows:[{s:9*60+30,e:12*60},{s:13*60,e:16*60}],
+    pre:{s:9*60,e:9*60+30},
+    hoursText:"北京时间 09:30–12:00 / 13:00–16:00",
+  },
+  "KR": {
+    label:"韩国 KRX",
+    windows:[{s:8*60,e:14*60+30}],
+    pre:{s:8*60-5,e:8*60}, // 8:55-9:00 Beijing (KRX 9:55-10:00 KST pre-open for afternoon; morning has no pre-open)
+    hoursText:"北京时间 08:00–14:30",
+  },
+  "US": {
+    label:"美股 NYSE/Nasdaq",
+    // approx: DST active roughly Mar 8 – Nov 1
+    windows:(()=>{
+      const now=new Date();
+      const m=now.getUTCMonth()+1, d=now.getUTCDate();
+      const isDST=(m>3&&m<11)||(m===3&&d>=8)||(m===11&&d<1);
+      const start=isDST?21*60+30:22*60+30;
+      // session spans midnight; represent as two windows 21:30→24:00 and 00:00→04:00
+      return [{s:start,e:24*60},{s:0,e:4*60}];
+    })(),
+    pre:(()=>{
+      const now=new Date();
+      const m=now.getUTCMonth()+1, d=now.getUTCDate();
+      const isDST=(m>3&&m<11)||(m===3&&d>=8)||(m===11&&d<1);
+      const ps=isDST?21*60:22*60; // 21:00 or 22:00 Beijing
+      const pe=isDST?21*60+30:22*60+30;
+      return {s:ps,e:pe};
+    })(),
+    hoursText:(()=>{
+      const now=new Date();
+      const m=now.getUTCMonth()+1, d=now.getUTCDate();
+      const isDST=(m>3&&m<11)||(m===3&&d>=8)||(m===11&&d<1);
+      return isDST?"北京时间 21:30–次日04:00 (夏令时)":"北京时间 22:30–次日05:00 (冬令时)";
+    })(),
+  },
+};
+
+function nowBeijingMinutes(){
+  // build a Date in Asia/Shanghai by using UTC fields +8h offset regardless of local TZ
+  const now=new Date();
+  // getUTC* → then +8h
+  let m=now.getUTCHours()*60+now.getUTCMinutes()+8*60;
+  // weekday: 0=Sun..6=Sat in UTC; close enough since 8h shift never crosses into Sat/Sun for our markets
+  const wd=now.getUTCDay();
+  // handle wrap around midnight for US session
+  if(m>=24*60) m-=24*60;
+  return {min:m, weekday:wd};
+}
+
+function sessionStatus(market){
+  const cfg=MARKET_SESSIONS[market];
+  if(!cfg) return {pill:'closed',text:'未知',hoursText:''};
+  const {min,weekday}=nowBeijingMinutes();
+  const isWeekend=weekday===0||weekday===6;
+  if(isWeekend) return {pill:'closed',text:'周末休市',hoursText:cfg.hoursText};
+  // check continuous windows
+  const inWindow=cfg.windows.some(w=>min>=w.s && min<w.e);
+  if(inWindow) return {pill:'open',text:'交易中',hoursText:cfg.hoursText};
+  // pre-market
+  if(cfg.pre && min>=cfg.pre.s && min<cfg.pre.e) return {pill:'premarket',text:'盘前',hoursText:cfg.hoursText};
+  return {pill:'closed',text:'已闭盘',hoursText:cfg.hoursText};
+}
+
 function renderCards(instruments){
   const el=document.getElementById('cards');
   el.innerHTML='';
@@ -138,6 +219,10 @@ function renderCards(instruments){
             <div><div class="k">成交</div><div class="v">${fmtVol(q.volume)}</div></div>
           </div>
           <div style="margin-top:8px;color:var(--sub);font-size:11px">日期 ${q.date} · 昨收 ${fmt(q.prev_close, it.market==='KR'?0:3)}</div>
+          <div class="session">
+            <span class="hours">${(()=>{const s=sessionStatus(it.market);return s.hoursText;})()}</span>
+            <span class="pill ${(()=>{const s=sessionStatus(it.market);return s.pill;})()}" data-market="${it.market}">${(()=>{const s=sessionStatus(it.market);return s.text;})()}</span>
+          </div>
         `:`<div class="skel">暂无数据</div>`}
       </div>`);
   });
@@ -251,6 +336,24 @@ setInterval(()=>{ countdown--; if(countdown<0) countdown=0;
   document.getElementById('countdown').textContent=countdown;
   if(countdown===0){ load(); countdown=60; }
 },1000);
+
+// ---- live Beijing clock + session pills (updates every 1s, independent of data fetch) ----
+function updateClockAndSessions(){
+  const now=new Date();
+  // Beijing = UTC+8
+  const bj=new Date(now.getTime()+8*3600*1000);
+  document.getElementById('clock').textContent='北京时间 '+
+    bj.toLocaleString('en-GB',{timeZone:'UTC',hour12:false});
+  // refresh session pills
+  document.querySelectorAll('.pill[data-market]').forEach(el=>{
+    const m=el.dataset.market;
+    const s=sessionStatus(m);
+    el.className='pill '+s.pill;
+    el.textContent=s.text;
+  });
+}
+updateClockAndSessions();
+setInterval(updateClockAndSessions,1000);
 </script>
 </body>
 </html>
