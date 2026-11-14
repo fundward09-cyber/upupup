@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SK 海力士看板 · 7709.HK / 000660.KS / SKHY</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0e1117; --panel:#161b22; --panel2:#1c2230; --border:#262d3a;
+    --txt:#e6edf3; --sub:#8b949e; --up:#21c7a8; --down:#ff5d5d; --gold:#f0b90b;
+    --c1:#f0b90b; --c2:#4d8af0; --c3:#a06bff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 system-ui,'Segoe UI','Microsoft YaHei',sans-serif}
+  header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  header h1{font-size:18px;margin:0;font-weight:600}
+  header .sub{color:var(--sub);font-size:12px;margin-top:2px}
+  header .meta{color:var(--sub);font-size:12px;text-align:right}
+  header .meta .live{color:var(--up)}
+  .wrap{max-width:1280px;margin:0 auto;padding:18px 22px 60px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:22px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .card .name{font-size:13px;color:var(--sub)}
+  .card .sym{font-size:11px;color:var(--sub);margin-top:1px}
+  .card .price{font-size:26px;font-weight:600;margin-top:8px}
+  .card .chg{font-size:13px;margin-top:2px}
+  .up{color:var(--up)} .down{color:var(--down)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:880px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .panel h2{font-size:14px;margin:0 0 12px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  .panel h2 .hint{font-size:11px;color:var(--sub);font-weight:400}
+  .ohlc{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;font-size:12px}
+  .ohlc div{background:var(--panel2);border-radius:8px;padding:6px 8px}
+  .ohlc .k{color:var(--sub);font-size:10px}
+  .ohlc .v{font-size:13px;margin-top:2px}
+  .chartbox{position:relative;height:260px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;background:var(--panel2);color:var(--sub);margin-left:6px}
+  .err{color:var(--down);font-size:12px}
+  button.refresh{background:var(--panel2);color:var(--txt);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px}
+  button.refresh:hover{border-color:var(--gold)}
+  .skel{color:var(--sub);font-size:13px;padding:20px 0}
+  .session{margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:11px}
+  .session .hours{color:var(--sub)}
+  .pill{padding:2px 7px;border-radius:5px;font-size:10px;font-weight:600}
+  .pill.open{background:rgba(33,199,168,.15);color:var(--up)}
+  .pill.closed{background:rgba(139,148,158,.15);color:var(--sub)}
+  .pill.premarket{background:rgba(240,185,11,.15);color:var(--gold)}
+  .clock{font-size:12px;color:var(--gold);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>SK 海力士每日股价看板 <span class="badge">7709.HK · 000660.KS · SKHY</span></h1>
+    <div class="sub">南方两倍做多海力士 ETF / 海力士韩国正股 / 海力士美股 — 数据由 yfinance (Yahoo) 提供，免费接口可能延迟</div>
+  </div>
+  <div class="meta">
+    <div>下次自动刷新 <span id="countdown">60</span>s</div>
+    <div style="margin-top:4px">
+      <span id="status" class="live">● 加载中…</span>
+      <button class="refresh" onclick="manualRefresh()">立即刷新</button>
+    </div>
+    <div id="fetched" style="margin-top:4px"></div>
+    <div class="clock" id="clock" style="margin-top:4px">北京时间 —</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="cards" id="cards"></div>
+
+  <div class="panel" style="grid-column:1 / -1; background:var(--panel2); border-color:var(--border)">
+    <h2 style="color:var(--gold)">⚠️ 数据与计算局限性提醒 <span class="hint">看图前必读</span></h2>
+    <ul style="margin:0; padding-left:18px; color:var(--sub); font-size:12px; line-height:1.7">
+      <li><b style="color:var(--txt)">数据源</b>：由 yfinance (Yahoo Finance) 免费接口提供，行情<b>可能有延迟</b>，偶发停牌/旧收盘价错位会导致单日涨跌幅异常（如 ETF 显示大涨而正股下跌）。异常天以"2x 还原图"的突变识别。</li>
+      <li><b style="color:var(--txt)">SKHY 美股历史短</b>：SKHY 为近期直通上市，可用历史仅约数天，归一化图中其线段远短于另外两只，<b>不要与 7709/000660 的斜率横向比较</b>。</li>
+      <li><b style="color:var(--txt)">归一化起点不一致</b>：三只标的各自的"首日=100"并非同一交易日（7709/000660 为 90 天前，SKHY 为上市日）。该图主要用于看 7709.HK 与 000660.KS 的相对强弱。</li>
+      <li><b style="color:var(--txt)">2x 还原图未含汇率</b>：理论 2x 以韩元本币 <code>000660.KS</code> 为基准，ETF 为港币计价且底层经 swap/期货，<b>未计入 HKD/KRW 汇率波动</b>，汇率会解释一部分偏离。</li>
+      <li><b style="color:var(--txt)">未扣费率与成本</b>：理论曲线未扣除 ETF 管理费、融资/借贷成本，实际 ETF 应<b>系统性略低于</b>理论 2x。</li>
+      <li><b style="color:var(--txt)">波动率损耗</b>：每日 2x 杠杆产品在连续大涨大跌后，累积收益会偏离"累计涨跌幅×2"，这正是该图要可视化的现象——两条线在剧烈波动后会分叉。</li>
+      <li><b style="color:var(--txt)">非投资建议</b>：本看板仅为数据可视化工具，不构成任何投资建议。</li>
+    </ul>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>近 90 日收盘折线 <span class="hint">各标的本币计价</span></h2>
+      <div class="chartbox"><canvas id="histChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>归一化对比 <span class="hint">首日 = 100</span></h2>
+      <div class="chartbox"><canvas id="normChart"></canvas></div>
+    </div>
+    <div class="panel" style="grid-column:1 / -1">
+      <h2>2x ETF vs 理论 2 倍海力士正股 <span class="hint">以 000660.KS 为基准(本币，未含汇率/费率)</span></h2>
+      <div class="chartbox" style="height:300px"><canvas id="levChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SYMS = {
+  "7709.HK":   {label:"南方2x ETF",  color:"#f0b90b"},
+  "000660.KS": {label:"海力士·韩",   color:"#4d8af0"},
+  "SKHY":      {label:"海力士·美",   color:"#a06bff"},
+};
+let histChart, normChart, levChart;
+let countdown = 60;
+
+function fmt(n, d=2){
+  if(n===null||n===undefined) return "—";
+  return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+}
+function fmtVol(n){
+  if(n===null||n===undefined) return "—";
+  if(n>=1e8) return (n/1e8).toFixed(2)+'亿';
+  if(n>=1e4) return (n/1e4).toFixed(1)+'万';
+  return n.toLocaleString();
+}
+function fmtTime(ts){
+  const d=new Date(ts*1000);
+  return d.toLocaleString('zh-CN',{hour12:false});
+}
+
+// ---- Market trading sessions (all times in minutes, Beijing time UTC+8) ----
+// HKEX:  09:30-12:00 / 13:00-16:00 HKT = same in Beijing
+// KRX:   09:00-15:30 KST = 08:00-14:30 Beijing
+// US :   09:30-16:00 ET  = 21:30-04:00 Beijing (summer DST, Mar–early Nov)
+//        winter std time: 22:30-05:00 Beijing
+const MARKET_SESSIONS = {
+  "HK": {
+    label:"港股 HKEX",
+    // continuous trading only (skip pre-open auction & lunch break detail)
+    windows:[{s:9*60+30,e:12*60},{s:13*60,e:16*60}],
+    pre:{s:9*60,e:9*60+30},
+    hoursText:"北京时间 09:30–12:00 / 13:00–16:00",
+  },
+  "KR": {
+    label:"韩国 KRX",
+    windows:[{s:8*60,e:14*60+30}],
+    pre:{s:8*60-5,e:8*60}, // 8:55-9:00 Beijing (KRX 9:55-10:00 KST pre-open for afternoon; morning has no pre-open)
+    hoursText:"北京时间 08:00–14:30",
+  },
+  "US": {
+    label:"美股 NYSE/Nasdaq",
+    // approx: DST active roughly Mar 8 – Nov 1
+    windows:(()=>{
+      const now=new Date();
+      const m=now.getUTCMonth()+1, d=now.getUTCDate();
+      const isDST=(m>3&&m<11)||(m===3&&d>=8)||(m===11&&d<1);
+      const start=isDST?21*60+30:22*60+30;
+      // session spans midnight; represent as two windows 21:30→24:00 and 00:00→04:00
+      return [{s:start,e:24*60},{s:0,e:4*60}];
+    })(),
+    pre:(()=>{
+      const now=new Date();
+      const m=now.getUTCMonth()+1, d=now.getUTCDate();
+      const isDST=(m>3&&m<11)||(m===3&&d>=8)||(m===11&&d<1);
+      const ps=isDST?21*60:22*60; // 21:00 or 22:00 Beijing
+      const pe=isDST?21*60+30:22*60+30;
+      return {s:ps,e:pe};
+    })(),
+    hoursText:(()=>{
+      const now=new Date();
+      const m=now.getUTCMonth()+1, d=now.getUTCDate();
+      const isDST=(m>3&&m<11)||(m===3&&d>=8)||(m===11&&d<1);
+      return isDST?"北京时间 21:30–次日04:00 (夏令时)":"北京时间 22:30–次日05:00 (冬令时)";
+    })(),
+  },
+};
+
+function nowBeijingMinutes(){
+  // build a Date in Asia/Shanghai by using UTC fields +8h offset regardless of local TZ
+  const now=new Date();
+  // getUTC* → then +8h
+  let m=now.getUTCHours()*60+now.getUTCMinutes()+8*60;
+  // weekday: 0=Sun..6=Sat in UTC; close enough since 8h shift never crosses into Sat/Sun for our markets
+  const wd=now.getUTCDay();
+  // handle wrap around midnight for US session
+  if(m>=24*60) m-=24*60;
+  return {min:m, weekday:wd};
+}
+
+function sessionStatus(market){
+  const cfg=MARKET_SESSIONS[market];
+  if(!cfg) return {pill:'closed',text:'未知',hoursText:''};
+  const {min,weekday}=nowBeijingMinutes();
+  const isWeekend=weekday===0||weekday===6;
+  if(isWeekend) return {pill:'closed',text:'周末休市',hoursText:cfg.hoursText};
+  // check continuous windows
+  const inWindow=cfg.windows.some(w=>min>=w.s && min<w.e);
+  if(inWindow) return {pill:'open',text:'交易中',hoursText:cfg.hoursText};
+  // pre-market
+  if(cfg.pre && min>=cfg.pre.s && min<cfg.pre.e) return {pill:'premarket',text:'盘前',hoursText:cfg.hoursText};
+  return {pill:'closed',text:'已闭盘',hoursText:cfg.hoursText};
+}
+
+function renderCards(instruments){
+  const el=document.getElementById('cards');
+  el.innerHTML='';
+  instruments.forEach(it=>{
+    const q=it.quote;
+    const cls=q&&q.change>=0?'up':'down';
+    const sign=q&&q.change>=0?'+':'';
+    const cur=it.currency;
+    const curLabel={HKD:'HK$',KRW:'₩',USD:'$'}[cur]||cur+' ';
+    el.insertAdjacentHTML('beforeend',`
+      <div class="card">
+        <div class="name">${it.name}</div>
+        <div class="sym">${it.symbol} · ${it.market} · ${cur}</div>
+        ${q?`
+          <div class="price">${curLabel}${fmt(q.price, it.market==='KR'?0:3)}</div>
+          <div class="chg ${cls}">${sign}${fmt(q.change, it.market==='KR'?0:3)} (${sign}${fmt(q.change_pct,2)}%)</div>
+          <div class="ohlc">
+            <div><div class="k">开盘</div><div class="v">${fmt(q.open, it.market==='KR'?0:3)}</div></div>
+            <div><div class="k">最高</div><div class="v up">${fmt(q.high, it.market==='KR'?0:3)}</div></div>
+            <div><div class="k">最低</div><div class="v down">${fmt(q.low, it.market==='KR'?0:3)}</div></div>
+            <div><div class="k">成交</div><div class="v">${fmtVol(q.volume)}</div></div>
+          </div>
+          <div style="margin-top:8px;color:var(--sub);font-size:11px">日期 ${q.date} · 昨收 ${fmt(q.prev_close, it.market==='KR'?0:3)}</div>
+          <div class="session">
+            <span class="hours">${(()=>{const s=sessionStatus(it.market);return s.hoursText;})()}</span>
+            <span class="pill ${(()=>{const s=sessionStatus(it.market);return s.pill;})()}" data-market="${it.market}">${(()=>{const s=sessionStatus(it.market);return s.text;})()}</span>
+          </div>
+        `:`<div class="skel">暂无数据</div>`}
+      </div>`);
+  });
+}
+
+const baseOpts={
+  responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{labels:{color:'#8b949e',boxWidth:12}}},
+  scales:{
+    x:{ticks:{color:'#8b949e',maxTicksLimit:8},grid:{color:'#1c2230'}},
+    y:{ticks:{color:'#8b949e'},grid:{color:'#1c2230'}}
+  },
+  interaction:{mode:'index',intersect:false}
+};
+
+function buildHistChart(histories){
+  // union of dates
+  const dateSets=Object.values(histories).map(h=>h.map(x=>x.date));
+  const dates=Array.from(new Set(dateSets.flat())).sort();
+  const axisColor={};
+  const datasets=Object.entries(SYMS).map(([sym,info],i)=>{
+    const m={};(histories[sym]||[]).forEach(h=>m[h.date]=h.close);
+    const yid='y'+i;
+    axisColor[yid]=info.color;
+    return {
+      label:info.label, borderColor:info.color, backgroundColor:info.color+'22',
+      pointRadius:0, borderWidth:1.5, tension:.25,
+      data:dates.map(d=>m[d]??null), spanGaps:true, yAxisID:yid
+    };
+  });
+  const scales={x:{ticks:{color:'#8b949e',maxTicksLimit:8},grid:{color:'#1c2230'}}};
+  Object.entries(axisColor).forEach(([id,col])=>{
+    scales[id]={position:id==='y0'?'left':'right',ticks:{color:col},grid:{drawOnChartArea:id==='y0',color:'#1c2230'}};
+  });
+  if(histChart) histChart.destroy();
+  histChart=new Chart(document.getElementById('histChart'),{
+    type:'line',
+    data:{labels:dates,datasets},
+    options:{...baseOpts, scales,
+      plugins:{...baseOpts.plugins,
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.parsed.y,2)}`}}
+      }
+    }
+  });
+}
+
+function buildNormChart(norm){
+  const dates=norm.map(r=>r.date);
+  const datasets=Object.entries(SYMS).map(([sym,info])=>({
+    label:info.label, borderColor:info.color, backgroundColor:info.color+'22',
+    pointRadius:0, borderWidth:1.8, tension:.25,
+    data:norm.map(r=>r[sym]??null), spanGaps:true,
+  }));
+  if(normChart) normChart.destroy();
+  normChart=new Chart(document.getElementById('normChart'),{
+    type:'line',
+    data:{labels:dates,datasets},
+    options:{...baseOpts,
+      plugins:{...baseOpts.plugins,tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.parsed.y,2)}`}}}
+    }
+  });
+}
+
+function buildLevChart(lever){
+  const dates=lever.map(r=>r.date);
+  const datasets=[
+    {label:'7709.HK 实际 (归一=100)', borderColor:'#f0b90b', backgroundColor:'#f0b90b22', pointRadius:0, borderWidth:1.8, tension:.25, data:lever.map(r=>r.etf)},
+    {label:'理论 2x 海力士正股 (归一=100)', borderColor:'#ff5d5d', backgroundColor:'#ff5d5d22', pointRadius:0, borderWidth:1.8, borderDash:[5,4], tension:.25, data:lever.map(r=>r.theoretical_2x)},
+  ];
+  if(levChart) levChart.destroy();
+  levChart=new Chart(document.getElementById('levChart'),{
+    type:'line',
+    data:{labels:dates,datasets},
+    options:{...baseOpts,
+      plugins:{...baseOpts.plugins,tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.parsed.y,2)}`}}}
+    }
+  });
+}
+
+async function load(){
+  try{
+    document.getElementById('status').textContent='● 加载中…';
+    const res=await fetch('./data.json?t='+Date.now());
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    renderCards(data.instruments);
+    buildHistChart(groupHistories(data.instruments));
+    buildNormChart(data.normalized||[]);
+    if(data.leverage&&data.leverage.length) buildLevChart(data.leverage);
+    document.getElementById('fetched').textContent='数据时间 '+fmtTime(data.fetched_at);
+    document.getElementById('status').innerHTML='<span class="live">● 已更新</span>';
+  }catch(e){
+    document.getElementById('status').innerHTML='<span class="err">● 失败：'+e.message+'</span>';
+  }
+}
+function groupHistories(instruments){
+  const h={};
+  instruments.forEach(it=>{ h[it.symbol]=it.history||[]; });
+  return h;
+}
+async function manualRefresh(){
+  document.getElementById('status').textContent='● 刷新中…';
+  // 本地 FastAPI 模式有 /api/refresh；静态站无此路由，404 时直接重拉 data.json
+  try{ await fetch('/api/refresh',{method:'POST'}); }catch(e){}
+  await load();
+  countdown=60;
+}
+
+load();
+setInterval(()=>{ countdown--; if(countdown<0) countdown=0;
+  document.getElementById('countdown').textContent=countdown;
+  if(countdown===0){ load(); countdown=60; }
+},1000);
+
+// ---- live Beijing clock + session pills (updates every 1s, independent of data fetch) ----
+function updateClockAndSessions(){
+  const now=new Date();
+  // Beijing = UTC+8
+  const bj=new Date(now.getTime()+8*3600*1000);
+  document.getElementById('clock').textContent='北京时间 '+
+    bj.toLocaleString('en-GB',{timeZone:'UTC',hour12:false});
+  // refresh session pills
+  document.querySelectorAll('.pill[data-market]').forEach(el=>{
+    const m=el.dataset.market;
+    const s=sessionStatus(m);
+    el.className='pill '+s.pill;
+    el.textContent=s.text;
+  });
+}
+updateClockAndSessions();
+setInterval(updateClockAndSessions,1000);
+</script>
+</body>
+</html>
